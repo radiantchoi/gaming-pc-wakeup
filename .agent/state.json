@@ -4,9 +4,9 @@
   "plan": ".agent/plan.md",
   "current_task": "T5",
   "current_task_status": "waiting_for_human",
-  "completed_tasks": ["T1", "T2", "T3", "T4"],
+  "completed_tasks": ["T1", "T2", "T3", "T4", "T6", "T7"],
   "failed_tasks": [],
-  "iteration": 5,
-  "updated_at": "2026-09-14T07:05:00Z",
-  "notes": "T4 (GET /health with test) done by the orchestrator and verified: uvicorn smoke test 200/404, pytest 1 passed, ruff clean. Findings at .agent/findings/T4.md. pytest shows an upstream StarletteDeprecationWarning about httpx vs httpx2; not blocking. Next: T5 on-device gate, which the user performs on the Pi 1 Model B (flash 32-bit Pi OS Lite trixie, install uv, uv sync with UV_PYTHON_DOWNLOADS=never, run /health, record RAM/sync time/startup time/RSS in .agent/findings/T5.md). Contingency if pydantic-core is unavailable on armv6l: stdlib http.server per SPEC.md."
+  "iteration": 7,
+  "updated_at": "2026-09-14T07:30:00Z",
+  "notes": "T6 (WoL module) and T7 (configuration) done by the orchestrator ahead of T5 with the user's approval; both are stdlib-only and survive the stdlib contingency unchanged. Findings at .agent/findings/T6.md and T7.md. pytest: 30 passed; ruff clean. T5 (on-device gate on the Pi 1 Model B) still waits for the user. T8 (POST /wake) is the first task that depends on the T5 outcome: FastAPI path if pydantic-core installs from piwheels, stdlib http.server path otherwise."
 }
