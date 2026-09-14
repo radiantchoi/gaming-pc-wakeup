@@ -7,6 +7,6 @@
   "completed_tasks": ["T1", "T2"],
   "failed_tasks": [],
   "iteration": 3,
-  "updated_at": "2026-08-31T01:13:09Z",
-  "notes": "T2 (Add dependencies) verified PASS by fresh audit subagent (omlx/Qwen3.8-27B-Uncensored-6bit, --no-session, edit/write disabled); all 3 acceptance criteria independently verified; verdict at .agent/verification/T2.md. T2 added to completed_tasks. Next: T3 (not started). Toolchain: uv 0.12.1, Python 3.14. Plan has 5 ordered tasks (T1-T5). Set status to 'done' after T5 passes; 'blocked' after 2 failed attempts on a task."
+  "updated_at": "2026-09-14T06:30:00Z",
+  "notes": "SPEC.md rewritten for the real goal: Wake-on-LAN server on a Raspberry Pi 1 Model B (ARMv6, 32-bit Pi OS Lite trixie, Python 3.13). Plan revised to T1-T11; T1/T2 remain valid and verified. T3 (align toolchain: Python 3.13 / requires-python>=3.11 / piwheels source for pydantic-core) is next. T5 and T11 need the user at the Pi (waiting_for_human). Contingency if pydantic-core is unavailable on armv6l: stdlib http.server per SPEC.md."
 }
