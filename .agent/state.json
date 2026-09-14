@@ -2,11 +2,11 @@
   "status": "ready",
   "spec": "SPEC.md",
   "plan": ".agent/plan.md",
-  "current_task": "T4",
-  "current_task_status": "not_started",
-  "completed_tasks": ["T1", "T2", "T3"],
+  "current_task": "T5",
+  "current_task_status": "waiting_for_human",
+  "completed_tasks": ["T1", "T2", "T3", "T4"],
   "failed_tasks": [],
-  "iteration": 4,
-  "updated_at": "2026-09-14T06:50:00Z",
-  "notes": "T3 (align toolchain with the Pi) done by the orchestrator and verified: Python 3.13, requires-python>=3.11, piwheels explicit index with pydantic-core pinned to it on armv6l/armv7l; pydantic-core added as a direct dependency because uv applies sources to direct deps only. Findings at .agent/findings/T3.md. Next: T4 (GET /health with test). T5 and T11 need the user at the Pi 1 Model B (waiting_for_human). Contingency if pydantic-core is unavailable on armv6l at T5: stdlib http.server per SPEC.md."
+  "iteration": 5,
+  "updated_at": "2026-09-14T07:05:00Z",
+  "notes": "T4 (GET /health with test) done by the orchestrator and verified: uvicorn smoke test 200/404, pytest 1 passed, ruff clean. Findings at .agent/findings/T4.md. pytest shows an upstream StarletteDeprecationWarning about httpx vs httpx2; not blocking. Next: T5 on-device gate, which the user performs on the Pi 1 Model B (flash 32-bit Pi OS Lite trixie, install uv, uv sync with UV_PYTHON_DOWNLOADS=never, run /health, record RAM/sync time/startup time/RSS in .agent/findings/T5.md). Contingency if pydantic-core is unavailable on armv6l: stdlib http.server per SPEC.md."
 }
