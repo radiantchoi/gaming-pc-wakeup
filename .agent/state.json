@@ -2,11 +2,11 @@
   "status": "ready",
   "spec": "SPEC.md",
   "plan": ".agent/plan.md",
-  "current_task": "T3",
+  "current_task": "T4",
   "current_task_status": "not_started",
-  "completed_tasks": ["T1", "T2"],
+  "completed_tasks": ["T1", "T2", "T3"],
   "failed_tasks": [],
-  "iteration": 3,
-  "updated_at": "2026-09-14T06:30:00Z",
-  "notes": "SPEC.md rewritten for the real goal: Wake-on-LAN server on a Raspberry Pi 1 Model B (ARMv6, 32-bit Pi OS Lite trixie, Python 3.13). Plan revised to T1-T11; T1/T2 remain valid and verified. T3 (align toolchain: Python 3.13 / requires-python>=3.11 / piwheels source for pydantic-core) is next. T5 and T11 need the user at the Pi (waiting_for_human). Contingency if pydantic-core is unavailable on armv6l: stdlib http.server per SPEC.md."
+  "iteration": 4,
+  "updated_at": "2026-09-14T06:50:00Z",
+  "notes": "T3 (align toolchain with the Pi) done by the orchestrator and verified: Python 3.13, requires-python>=3.11, piwheels explicit index with pydantic-core pinned to it on armv6l/armv7l; pydantic-core added as a direct dependency because uv applies sources to direct deps only. Findings at .agent/findings/T3.md. Next: T4 (GET /health with test). T5 and T11 need the user at the Pi 1 Model B (waiting_for_human). Contingency if pydantic-core is unavailable on armv6l at T5: stdlib http.server per SPEC.md."
 }
