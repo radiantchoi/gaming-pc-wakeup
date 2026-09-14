@@ -19,9 +19,11 @@ that PC is currently reachable.
   a managed Python (there are no ARMv6 builds); set
   `UV_PYTHON_DOWNLOADS=never` on the Pi.
 - Package index: PyPI has no ARMv6 wheels for `pydantic-core`. The project
-  configures https://www.piwheels.org/simple as an additional index in
-  `pyproject.toml` so that `uv sync` on the Pi installs prebuilt
-  `linux_armv6l` wheels instead of compiling.
+  configures https://www.piwheels.org/simple as an explicit index in
+  `pyproject.toml` and pins `pydantic-core` to it on 32-bit ARM Linux so
+  that `uv sync` on the Pi installs prebuilt `linux_armv6l` wheels instead
+  of compiling. Because uv applies sources only to direct dependencies,
+  `pydantic-core` is listed as a direct dependency for this purpose only.
 - The server runs as a `systemd` service and starts on boot.
 
 ## Remote access

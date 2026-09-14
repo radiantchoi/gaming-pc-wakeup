@@ -15,7 +15,7 @@ Each task is self-contained: read `SPEC.md` + this file, do one task, verify its
   - `tests/test_health.py`, `tests/test_wol.py`, `tests/test_config.py`, `tests/test_wake.py`, `tests/test_status.py`.
   - `deploy/gaming-pc-wakeup.service`, `README.md`.
 - Env vars and endpoint contracts are defined in `SPEC.md` (Configuration, Endpoints). Do not invent others.
-- Minimalism rule: no extra routes, no DI, no pydantic settings, no logging config, no CLI. Dependencies stay exactly: fastapi, uvicorn; dev: pytest, httpx, ruff.
+- Minimalism rule: no extra routes, no DI, no pydantic settings, no logging config, no CLI. Dependencies stay exactly: fastapi, uvicorn, pydantic-core (listed only so its piwheels source applies); dev: pytest, httpx, ruff.
 - Tests never touch the network: monkeypatch `app.main.send_magic_packet` and the TCP connect helper. Tests set env vars with `monkeypatch.setenv` and import/reload `app.main` after setting them (use `importlib.reload`).
 - Every code task ends with `uv run ruff check .` and `uv run pytest -q` passing.
 
@@ -27,16 +27,17 @@ Each task is self-contained: read `SPEC.md` + this file, do one task, verify its
 ### T2 — Add dependencies (DONE)
 - `uv add fastapi uvicorn`; `uv add --dev pytest httpx ruff`. Verified in `.agent/verification/T2.md`.
 
-### T3 — Align toolchain with the Pi
+### T3 — Align toolchain with the Pi (DONE)
 - Action:
   - `.python-version` → `3.13`.
-  - `pyproject.toml`: `requires-python = ">=3.11"`; add `[[tool.uv.index]]` named `piwheels` (`https://www.piwheels.org/simple`, `explicit = true`) and `[tool.uv.sources]` pinning `pydantic-core` to that index with marker `platform_machine == 'armv6l' or platform_machine == 'armv7l'`.
+  - `pyproject.toml`: `requires-python = ">=3.11"`; add `[[tool.uv.index]]` named `piwheels` (`https://www.piwheels.org/simple`, `explicit = true`) and `[tool.uv.sources]` pinning `pydantic-core` to that index with marker `platform_machine == 'armv6l' or platform_machine == 'armv7l'`. Add `pydantic-core` to `dependencies` (uv applies sources to direct dependencies only; verified by experiment).
   - `uv lock` then `uv sync`.
 - Acceptance:
   - `uv sync` exits 0 on the dev machine (PyPI wheels used there).
   - `uv.lock` contains a `pydantic-core` entry sourced from `https://www.piwheels.org/simple` whose wheels include `linux_armv6l` files.
   - `uv run python -c "import fastapi, uvicorn"` exits 0.
-  - Dependencies list unchanged (fastapi, uvicorn; dev: httpx, pytest, ruff).
+  - Dependencies: fastapi, uvicorn, pydantic-core; dev: httpx, pytest, ruff.
+- Result: see `.agent/findings/T3.md`.
 
 ### T4 — Implement `GET /health` with test
 - Action: create `app/__init__.py`, `app/main.py` with `app = FastAPI()` and `@app.get("/health")` returning `{"status": "ok"}`; `tests/__init__.py`; `tests/test_health.py` using `TestClient(app)`.
