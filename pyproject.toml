@@ -10,9 +10,6 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.141.1",
     "uvicorn>=0.52.4",
-    # Transitive via fastapi/pydantic; listed directly so the piwheels
-    # source below applies (uv only applies sources to direct deps).
-    "pydantic-core>=2.46.5",
 ]
 
 [dependency-groups]
@@ -21,13 +18,3 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.5",
 ]
-
-# Raspberry Pi 1 (ARMv6) has no pydantic-core wheels on PyPI; piwheels
-# provides prebuilt linux_armv6l wheels. Only used on 32-bit ARM Linux.
-[[tool.uv.index]]
-name = "piwheels"
-url = "https://www.piwheels.org/simple"
-explicit = true
-
-[tool.uv.sources]
-pydantic-core = { index = "piwheels", marker = "platform_machine == 'armv6l' or platform_machine == 'armv7l'" }
