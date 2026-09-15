@@ -1,37 +1,63 @@
 # Gaming PC Wake-on-LAN Server
 
 ## Goal
-Build a minimal FastAPI server that runs on a Raspberry Pi and wakes a single
-gaming PC on the same local network via Wake-on-LAN (WoL), and reports whether
-that PC is currently reachable.
+Build a minimal FastAPI server that runs on a small always-on host (a
+Raspberry Pi 1 or an old Android phone under Termux) and wakes a single gaming
+PC on the same local network via Wake-on-LAN (WoL), and reports whether that
+PC is currently reachable.
 
 ## Deployment context
-- Target hardware: Raspberry Pi 1 Model B (BCM2835, ARMv6, single core
-  700 MHz, 256 MB or 512 MB RAM depending on revision, 100 Mbps Ethernet).
-  This is a 32-bit-only board.
-- OS: fresh install of Raspberry Pi OS Lite (32-bit, Debian 13 "trixie"),
-  which ships Python 3.13. No desktop.
+Common to all hosts:
 - Runs directly on the host (no Docker; container bridges block UDP
   broadcast).
-- The Pi is connected by Ethernet to the same L2 broadcast domain as the
-  gaming PC (same subnet and VLAN). The PC is connected by Ethernet.
-- Python: the OS-provided interpreter is used. `uv` must not try to download
-  a managed Python (there are no ARMv6 builds); set
-  `UV_PYTHON_DOWNLOADS=never` on the Pi.
-- Package index: PyPI has no ARMv6 wheels for `pydantic-core`. The project
-  configures https://www.piwheels.org/simple as an explicit index in
-  `pyproject.toml` and pins `pydantic-core` to it on 32-bit ARM Linux so
-  that `uv sync` on the Pi installs prebuilt `linux_armv6l` wheels instead
-  of compiling. Because uv applies sources only to direct dependencies,
-  `pydantic-core` is listed as a direct dependency for this purpose only.
-- The server runs as a `systemd` service and starts on boot.
+- The host is on the same L2 broadcast domain as the gaming PC (same subnet
+  and VLAN). The PC is connected by Ethernet; the host may use Ethernet or
+  Wi-Fi.
+- Python: the host's own interpreter (3.11+). `uv` must not download a
+  managed Python on either host (there is no ARMv6 build and no
+  Android/bionic build): set `UV_PYTHON_DOWNLOADS=never` there.
+- `pyproject.toml` and `uv.lock` are host-neutral. Every host-specific
+  workaround lives under `deploy/<host>/` and nowhere else.
+- The server starts on boot and restarts on failure, by whatever mechanism
+  the host provides.
+
+Two hosts are supported in parallel; either one is sufficient.
+
+### Host A: Raspberry Pi 1 Model B
+- BCM2835, ARMv6, single core 700 MHz, 256 MB or 512 MB RAM by revision,
+  100 Mbps Ethernet. 32-bit only.
+- OS: fresh Raspberry Pi OS Lite (32-bit, Debian 13 "trixie"), Python 3.13,
+  no desktop.
+- PyPI has no ARMv6 wheels for `pydantic-core`; piwheels does.
+  `deploy/pi/install.sh` creates `.venv` with the system Python, exports
+  pinned versions from `uv.lock` (`uv export`), and installs them with
+  `uv pip install` using https://www.piwheels.org/simple as an additional
+  index (`--index-strategy unsafe-best-match`). `pyproject.toml` does not
+  mention piwheels.
+- Runs as a `systemd` service (`deploy/pi/gaming-pc-wakeup.service`) that
+  executes `.venv/bin/uvicorn` directly, so uv is not involved at runtime.
+
+### Host B: Samsung Galaxy Note 8 with Termux
+- aarch64, 6 GB RAM, Android 9, Wi-Fi. Termux from F-Droid or GitHub (not
+  the Play Store build).
+- Python from `pkg install python` (3.14 at the time of writing), `uv` from
+  `pkg install uv`, `rust` from `pkg install rust` so that `pydantic-core`
+  builds from source once (uv caches the built wheel).
+- `deploy/termux/install.sh` runs `UV_PYTHON_DOWNLOADS=never uv sync`.
+  `deploy/termux/boot.sh` (copied to `~/.termux/boot/`) acquires
+  `termux-wake-lock` and starts `.venv/bin/uvicorn`; the Termux:Boot app
+  provides start-on-boot.
+- Android background limits are handled outside the code: Termux excluded
+  from battery optimisation, Wi-Fi sleep disabled, phone kept on power. The
+  README lists these steps.
 
 ## Remote access
-- Remote use (outside the LAN) goes through Tailscale installed on the Pi and
-  on the client device. The server binds to `0.0.0.0:8000` and is reached at
-  its Tailscale address; nothing is exposed to the public internet.
+- Remote use (outside the LAN) goes through Tailscale installed on the host
+  and on the client device. The server binds to `0.0.0.0:8000` and is reached
+  at its Tailscale address; nothing is exposed to the public internet.
 - Tailscale is not part of this codebase. The README documents installing it
-  from the Raspberry Pi OS apt repository and the resulting URL pattern.
+  on each host (apt repository on the Pi, the Android app on the phone) and
+  the resulting URL pattern.
 - `WOL_TOKEN` remains an optional second layer; it is not required when
   access is limited to the tailnet.
 
@@ -39,9 +65,10 @@ that PC is currently reachable.
 
 ### Toolchain and style
 - Use `uv` for project and dependency management.
-- Use Python and FastAPI. `requires-python = ">=3.11"`; `.python-version`
-  is `3.13` to match the Pi. Development on other machines may use any
-  3.11+ interpreter.
+- Use Python and FastAPI. `requires-python = ">=3.11"`. There is no
+  `.python-version`; each machine uses its own interpreter that satisfies
+  the range. Dependencies are exactly fastapi and uvicorn (dev: pytest,
+  httpx, ruff).
 - Follow PEP 8; `ruff check .` must pass.
 - Keep the implementation minimal and easy to verify. Avoid unnecessary
   dependencies, abstractions, and features.
@@ -97,8 +124,12 @@ Expose exactly these three endpoints. Any other path returns 404.
   `send_magic_packet(mac: bytes, broadcast: str, port: int) -> None`.
 - `app/main.py` — the FastAPI app and the three routes only.
 - `tests/` — pytest tests (see below).
-- `deploy/gaming-pc-wakeup.service` — systemd unit template.
-- `README.md` — setup for the Pi and prerequisites for the PC.
+- `deploy/common/gaming-pc-wakeup.env.example` — environment file template.
+- `deploy/pi/` — everything specific to the Raspberry Pi 1: `install.sh`,
+  `gaming-pc-wakeup.service`.
+- `deploy/termux/` — everything specific to the Note 8: `install.sh`,
+  `boot.sh`.
+- `README.md` — setup per host and prerequisites for the PC.
 
 ### Tests
 - Use `pytest` and `fastapi.testclient.TestClient`.
@@ -119,30 +150,45 @@ Expose exactly these three endpoints. Any other path returns 404.
   `monkeypatch.setenv`); no test-only config paths in application code.
 
 ### Deployment artifacts
-- `deploy/gaming-pc-wakeup.service`: runs
-  `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000` from the project
-  directory, reads variables from an `EnvironmentFile`, sets
-  `UV_PYTHON_DOWNLOADS=never`, restarts on failure, and is
+- `deploy/common/gaming-pc-wakeup.env.example`: every `WOL_*` variable with
+  its default or a placeholder, one per line, `KEY=value` form (readable by
+  systemd `EnvironmentFile` and by `set -a; . file` in a shell).
+- `deploy/pi/install.sh`: idempotent; `uv venv --python python3`,
+  `uv export --frozen --no-dev --no-hashes` to a temp file,
+  `uv pip install --index https://www.piwheels.org/simple
+  --index-strategy unsafe-best-match -r <that file>`. Sets
+  `UV_PYTHON_DOWNLOADS=never`.
+- `deploy/pi/gaming-pc-wakeup.service`: `ExecStart=<project>/.venv/bin/uvicorn
+  app.main:app --host 0.0.0.0 --port 8000`, `EnvironmentFile`, `Restart=on-failure`,
   `WantedBy=multi-user.target`.
-- `README.md` documents:
-  - Flashing Raspberry Pi OS Lite (32-bit, trixie).
-  - Installing `uv` on the Pi (ARMv6 build), cloning the repo,
-    `UV_PYTHON_DOWNLOADS=never uv sync`.
-  - Creating the environment file and enabling the service.
-  - Installing Tailscale on the Pi and reaching the server over the tailnet.
+- `deploy/termux/install.sh`: `pkg install python uv rust` (idempotent) then
+  `UV_PYTHON_DOWNLOADS=never uv sync --no-dev`.
+- `deploy/termux/boot.sh`: `termux-wake-lock`, source the env file, exec
+  `.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+- `README.md` documents, in this order:
   - PC prerequisites: WoL enabled in BIOS/UEFI, NIC driver set to allow
     waking the computer, Windows Fast Startup disabled, Ethernet connection.
-  - Example `curl` commands for the three endpoints.
+  - Environment file: copy the example, fill in `WOL_MAC` and `WOL_HOST`.
+  - Host A (Pi 1): flash Raspberry Pi OS Lite 32-bit trixie, install uv
+    (ARMv6 build), clone, run `deploy/pi/install.sh`, install and enable the
+    service, install Tailscale from apt.
+  - Host B (Note 8): install Termux and Termux:Boot from F-Droid, clone, run
+    `deploy/termux/install.sh`, copy `boot.sh` to `~/.termux/boot/`, exclude
+    Termux from battery optimisation, disable Wi-Fi sleep, install the
+    Tailscale Android app.
+  - Example `curl` commands for the three endpoints over the tailnet.
 
-## On-device gate and contingency
-- Before the endpoints are implemented, `uv sync` and a `GET /health`
-  smoke test must succeed on the Pi 1 itself (dependencies resolve from
-  piwheels, server starts, startup time is recorded).
-- If `uv sync` cannot install `pydantic-core` on the Pi, the contingency is
-  to drop FastAPI, uvicorn, and httpx and implement the same three endpoints
-  with the standard library `http.server`. The endpoint contracts,
-  configuration, tests, and deployment artifacts in this document stay the
-  same; only the "Use FastAPI" and `TestClient` requirements change.
+## Host gates and contingency
+- Each host has a gate the user runs on the device: run
+  `deploy/<host>/install.sh`, start the server, confirm `GET /health` returns
+  200, and (for the phone) confirm the server is still running after the
+  screen has been off overnight. Results are recorded under
+  `.agent/findings/`.
+- The gates do not block implementing the endpoints. The FastAPI stack is
+  already known to install on the Note 8, so no stdlib fallback is planned.
+- If the Pi 1 gate fails (for example no usable `pydantic-core` wheel), the
+  Pi 1 is dropped from the supported hosts and `deploy/pi/` is removed.
+  Nothing else changes.
 
 ## Non-goals
 - No web UI.
@@ -159,8 +205,9 @@ Expose exactly these three endpoints. Any other path returns 404.
   `GET /health`, `POST /wake`, and `GET /status` return the documented
   responses; any other path returns 404.
 - Without `WOL_MAC`, the server refuses to start with a clear error.
-- `deploy/gaming-pc-wakeup.service` and `README.md` exist and match the
-  behaviour above.
-- On the Pi 1 Model B: `uv sync` completes using piwheels wheels, the
-  service starts on boot, and `POST /wake` from a Tailscale-connected client
-  turns the gaming PC on.
+- `deploy/common/`, `deploy/pi/`, `deploy/termux/`, and `README.md` exist
+  and match the behaviour above.
+- On at least one supported host: the install script completes, the server
+  starts on boot, and `POST /wake` from a Tailscale-connected client turns
+  the gaming PC on. A host that was not tried is marked untested in the
+  README.
