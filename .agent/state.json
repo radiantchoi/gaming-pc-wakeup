@@ -2,11 +2,11 @@
   "status": "ready",
   "spec": "SPEC.md",
   "plan": ".agent/plan.md",
-  "current_task": "T8",
+  "current_task": "T10",
   "current_task_status": "not_started",
-  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7"],
+  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9"],
   "failed_tasks": [],
-  "iteration": 8,
-  "updated_at": "2026-09-16T03:00:00Z",
-  "notes": "Two hosts now supported in parallel: Raspberry Pi 1 Model B and Galaxy Note 8 + Termux (FastAPI and Rust already installed there, so pydantic-core builds). T3b made pyproject.toml/uv.lock host-neutral; all host-specific workarounds go under deploy/<host>/ in T10. Findings at .agent/findings/T3b.md. T5 (host gates: T5-pi, T5-termux) is human-run and no longer blocks T6-T10; at least one must pass before T11. Next worker task: T8 (POST /wake). pytest: 30 passed; ruff clean."
+  "iteration": 10,
+  "updated_at": "2026-09-16T04:00:00Z",
+  "notes": "T8 (POST /wake) and T9 (GET /status) done by the orchestrator and verified: 42 tests pass, ruff clean, uvicorn smoke tests for all three endpoints plus 404/405 and the missing-WOL_MAC startup failure. Findings at .agent/findings/T8.md and T9.md. All application code is complete. Next: T10 (deployment artifacts: deploy/common, deploy/pi, deploy/termux, README). T5 host gates (T5-pi, T5-termux) are human-run and still pending; at least one must pass before T11."
 }
