@@ -46,6 +46,15 @@ def send_magic_packet(mac: bytes, broadcast: str, port: int) -> None:
         sock.sendto(packet, (broadcast, port))
 
 
+def is_port_open(host: str, port: int, timeout: float) -> bool:
+    """Return True if a TCP connection to ``host:port`` succeeds within ``timeout``."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def _check_mac(mac: bytes) -> None:
     if len(mac) != _MAC_LEN:
         raise ValueError(f"MAC must be {_MAC_LEN} bytes, got {len(mac)}")

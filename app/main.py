@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Header, HTTPException
 
 from app.config import load_settings
-from app.wol import format_mac, send_magic_packet
+from app.wol import format_mac, is_port_open, send_magic_packet
 
 app = FastAPI()
 settings = load_settings()
@@ -26,3 +26,9 @@ def wake(x_token: str | None = Header(default=None)) -> dict[str, str | int]:
         "broadcast": settings.broadcast,
         "port": settings.port,
     }
+
+
+@app.get("/status")
+def status() -> dict[str, str | int | bool]:
+    online = is_port_open(settings.host, settings.status_port, settings.status_timeout)
+    return {"online": online, "host": settings.host, "port": settings.status_port}
