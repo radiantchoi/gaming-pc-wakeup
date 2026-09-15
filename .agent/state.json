@@ -2,11 +2,11 @@
   "status": "ready",
   "spec": "SPEC.md",
   "plan": ".agent/plan.md",
-  "current_task": "T5",
-  "current_task_status": "waiting_for_human",
-  "completed_tasks": ["T1", "T2", "T3", "T4", "T6", "T7"],
+  "current_task": "T8",
+  "current_task_status": "not_started",
+  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7"],
   "failed_tasks": [],
-  "iteration": 7,
-  "updated_at": "2026-09-14T07:30:00Z",
-  "notes": "T6 (WoL module) and T7 (configuration) done by the orchestrator ahead of T5 with the user's approval; both are stdlib-only and survive the stdlib contingency unchanged. Findings at .agent/findings/T6.md and T7.md. pytest: 30 passed; ruff clean. T5 (on-device gate on the Pi 1 Model B) still waits for the user. T8 (POST /wake) is the first task that depends on the T5 outcome: FastAPI path if pydantic-core installs from piwheels, stdlib http.server path otherwise."
+  "iteration": 8,
+  "updated_at": "2026-09-16T03:00:00Z",
+  "notes": "Two hosts now supported in parallel: Raspberry Pi 1 Model B and Galaxy Note 8 + Termux (FastAPI and Rust already installed there, so pydantic-core builds). T3b made pyproject.toml/uv.lock host-neutral; all host-specific workarounds go under deploy/<host>/ in T10. Findings at .agent/findings/T3b.md. T5 (host gates: T5-pi, T5-termux) is human-run and no longer blocks T6-T10; at least one must pass before T11. Next worker task: T8 (POST /wake). pytest: 30 passed; ruff clean."
 }
