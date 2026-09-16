@@ -1,0 +1,15 @@
+[Unit]
+Description=Wake-on-LAN server for the gaming PC
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/gaming-pc-wakeup
+EnvironmentFile=/etc/gaming-pc-wakeup.env
+ExecStart=/home/pi/gaming-pc-wakeup/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
