@@ -2,11 +2,11 @@
   "status": "ready",
   "spec": "SPEC.md",
   "plan": ".agent/plan.md",
-  "current_task": "T10",
-  "current_task_status": "not_started",
-  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9"],
+  "current_task": "T5",
+  "current_task_status": "waiting_for_human",
+  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9", "T10"],
   "failed_tasks": [],
-  "iteration": 10,
-  "updated_at": "2026-09-16T04:00:00Z",
-  "notes": "T8 (POST /wake) and T9 (GET /status) done by the orchestrator and verified: 42 tests pass, ruff clean, uvicorn smoke tests for all three endpoints plus 404/405 and the missing-WOL_MAC startup failure. Findings at .agent/findings/T8.md and T9.md. All application code is complete. Next: T10 (deployment artifacts: deploy/common, deploy/pi, deploy/termux, README). T5 host gates (T5-pi, T5-termux) are human-run and still pending; at least one must pass before T11."
+  "iteration": 11,
+  "updated_at": "2026-09-16T05:00:00Z",
+  "notes": "T10 (deployment artifacts) done by the orchestrator and verified: deploy/common env example, deploy/pi install script + systemd unit, deploy/termux install + boot scripts, README. deploy/pi/install.sh was exercised end to end in a clean clone on the dev machine. Findings at .agent/findings/T10.md. All worker tasks are complete; repository is public at https://github.com/radiantchoi/gaming-pc-wakeup. Waiting on the user for T5-pi and/or T5-termux (host gates), then T11 local checklist + on-device acceptance. At least one host must pass before status can be 'done'."
 }
