@@ -4,9 +4,9 @@
   "plan": ".agent/plan.md",
   "current_task": "T5",
   "current_task_status": "waiting_for_human",
-  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9", "T10"],
+  "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9", "T10", "T12"],
   "failed_tasks": [],
-  "iteration": 11,
-  "updated_at": "2026-09-16T05:00:00Z",
-  "notes": "T10 (deployment artifacts) done by the orchestrator and verified: deploy/common env example, deploy/pi install script + systemd unit, deploy/termux install + boot scripts, README. deploy/pi/install.sh was exercised end to end in a clean clone on the dev machine. Findings at .agent/findings/T10.md. All worker tasks are complete; repository is public at https://github.com/radiantchoi/gaming-pc-wakeup. Waiting on the user for T5-pi and/or T5-termux (host gates), then T11 local checklist + on-device acceptance. At least one host must pass before status can be 'done'."
+  "iteration": 12,
+  "updated_at": "2026-09-17T03:00:00Z",
+  "notes": "T12 (POST /sleep over SSH) done by the orchestrator and verified locally: 61 tests pass, ruff clean, uvicorn smoke for 503/502/405 and the half-configured startup failure. Findings at .agent/findings/T12.md. Sleep is optional: with WOL_SSH_USER/WOL_SSH_KEY unset the server behaves as before. All worker tasks complete. Waiting on the user for the host gates (T5-pi and/or T5-termux) and the PC-side SSH/scheduled-task setup, then T11 on-device acceptance (wake, status, sleep)."
 }
