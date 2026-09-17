@@ -3,8 +3,8 @@
 ## Goal
 Build a minimal FastAPI server that runs on a small always-on host (a
 Raspberry Pi 1 or an old Android phone under Termux) and wakes a single gaming
-PC on the same local network via Wake-on-LAN (WoL), and reports whether that
-PC is currently reachable.
+PC on the same local network via Wake-on-LAN (WoL), reports whether that PC
+is currently reachable, and can put it to sleep over SSH.
 
 ## Deployment context
 Common to all hosts:
@@ -87,13 +87,20 @@ flags.
 | `WOL_HOST`           | yes      |                     | IP address or hostname of the gaming PC, used by `GET /status`. |
 | `WOL_STATUS_PORT`    | no       | `3389`              | TCP port on the PC that is open when it is up (RDP by default). |
 | `WOL_STATUS_TIMEOUT` | no       | `1.0`               | Seconds to wait for the TCP connect in `GET /status`. |
-| `WOL_TOKEN`          | no       | unset               | If set, `POST /wake` requires header `X-Token: <value>`; otherwise no auth. |
+| `WOL_TOKEN`          | no       | unset               | If set, `POST /wake` and `POST /sleep` require header `X-Token: <value>`; otherwise no auth. |
+| `WOL_SSH_USER`       | no       | unset               | Windows user name for `POST /sleep`. Set together with `WOL_SSH_KEY`. |
+| `WOL_SSH_KEY`        | no       | unset               | Path to the private key the host uses to SSH into the PC. Must exist. |
+| `WOL_SSH_PORT`       | no       | `22`                | SSH port on the PC. |
+| `WOL_SSH_TIMEOUT`    | no       | `10.0`              | Seconds allowed for the whole `ssh` invocation in `POST /sleep`. |
 
 - The server must fail at startup with a clear error if `WOL_MAC` is missing
   or not a valid MAC, or if `WOL_HOST` is missing.
+- It must also fail at startup if only one of `WOL_SSH_USER`/`WOL_SSH_KEY`
+  is set, or if `WOL_SSH_KEY` points to a file that does not exist. With
+  neither set, sleep is simply not configured.
 
 ### Endpoints
-Expose exactly these three endpoints. Any other path returns 404.
+Expose exactly these four endpoints. Any other path returns 404.
 
 - `GET /health`
   - Always `200` with body `{"status": "ok"}`.
@@ -115,6 +122,25 @@ Expose exactly these three endpoints. Any other path returns 404.
   - `200` with body `{"online": true|false, "host": "<WOL_HOST>",
     "port": <int>}`. Connection refused or timeout means `online: false`;
     it is not an error.
+- `POST /sleep`
+  - Runs, via the host's `ssh` client:
+    `ssh -i <WOL_SSH_KEY> -p <WOL_SSH_PORT> -o BatchMode=yes
+    -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new
+    <WOL_SSH_USER>@<WOL_HOST> schtasks /run /tn gaming-pc-sleep`
+    with `WOL_SSH_TIMEOUT` as the overall timeout. The PC side is a
+    scheduled task named `gaming-pc-sleep` that suspends the machine a
+    moment later, so the SSH session closes cleanly before the PC sleeps
+    (see `deploy/windows/`).
+  - `200` with body `{"status": "sleeping", "host": "<WOL_HOST>"}` when
+    `ssh` exits 0.
+  - `401` with body `{"detail": "invalid token"}` under the same rule as
+    `POST /wake`.
+  - `503` with body `{"detail": "sleep is not configured: set WOL_SSH_USER
+    and WOL_SSH_KEY"}` when sleep is not configured.
+  - `502` with body `{"detail": "<message>"}` when `ssh` is missing, exits
+    non-zero (message is its stderr, or the exit code if stderr is empty),
+    or times out.
+  - Whether the PC actually slept is observed with `GET /status`.
 
 ### Code layout
 - `app/__init__.py` (empty)
@@ -122,19 +148,25 @@ Expose exactly these three endpoints. Any other path returns 404.
 - `app/wol.py` — pure functions: `parse_mac(str) -> bytes`,
   `build_magic_packet(mac: bytes) -> bytes`, and
   `send_magic_packet(mac: bytes, broadcast: str, port: int) -> None`.
-- `app/main.py` — the FastAPI app and the three routes only.
+- `app/sleep.py` — `request_sleep(host, user, key, port, timeout) -> None`;
+  builds the `ssh` command above, runs it with `subprocess.run`, raises
+  `RuntimeError` with a message on any failure.
+- `app/main.py` — the FastAPI app and the four routes only.
 - `tests/` — pytest tests (see below).
 - `deploy/common/gaming-pc-wakeup.env.example` — environment file template.
 - `deploy/pi/` — everything specific to the Raspberry Pi 1: `install.sh`,
   `gaming-pc-wakeup.service`.
 - `deploy/termux/` — everything specific to the Note 8: `install.sh`,
   `boot.sh`.
+- `deploy/windows/sleep.ps1` — the script the PC's `gaming-pc-sleep`
+  scheduled task runs.
 - `README.md` — setup per host and prerequisites for the PC.
 
 ### Tests
 - Use `pytest` and `fastapi.testclient.TestClient`.
-- Tests must not send real network traffic. Patch `send_magic_packet` and the
-  TCP connect used by `GET /status`.
+- Tests must not send real network traffic. Patch `send_magic_packet`, the
+  TCP connect used by `GET /status`, and `subprocess.run` under
+  `request_sleep`. Never invoke a real `ssh`.
 - Cover at least:
   - `GET /health` returns `200` `{"status": "ok"}`.
   - `parse_mac` accepts the three formats and rejects invalid input.
@@ -146,6 +178,13 @@ Expose exactly these three endpoints. Any other path returns 404.
     wrong.
   - `GET /status` returns `online: true` on successful connect and
     `online: false` on refusal or timeout.
+  - `request_sleep` builds exactly the documented `ssh` argv and maps a
+    non-zero exit, a missing `ssh` binary, and a timeout to `RuntimeError`.
+  - `POST /sleep` returns `503` when unconfigured, `401` on a bad token,
+    `200` with the documented body on success, and `502` when
+    `request_sleep` raises.
+  - Startup fails when only one of `WOL_SSH_USER`/`WOL_SSH_KEY` is set or
+    the key file is missing.
 - Configuration is supplied to tests via environment variables (for example
   `monkeypatch.setenv`); no test-only config paths in application code.
 
@@ -165,10 +204,20 @@ Expose exactly these three endpoints. Any other path returns 404.
   `UV_PYTHON_DOWNLOADS=never uv sync --no-dev`.
 - `deploy/termux/boot.sh`: `termux-wake-lock`, source the env file, exec
   `.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+- `deploy/windows/sleep.ps1`: calls `powrprof.dll` `SetSuspendState(false,
+  false, false)` via P/Invoke (sleep, never hibernate). Installed on the PC
+  as the action of a scheduled task `gaming-pc-sleep` with no trigger,
+  run on demand.
 - `README.md` documents, in this order:
   - PC prerequisites: WoL enabled in BIOS/UEFI, NIC driver set to allow
     waking the computer, Windows Fast Startup disabled, Ethernet connection.
-  - Environment file: copy the example, fill in `WOL_MAC` and `WOL_HOST`.
+  - PC sleep over SSH (optional): enable the OpenSSH Server optional
+    feature, generate an ed25519 key on the host, register the public key
+    in the right `authorized_keys` file with a `command="schtasks /run /tn
+    gaming-pc-sleep"` restriction, copy `sleep.ps1`, register the scheduled
+    task, and test `schtasks /run` locally before testing over SSH.
+  - Environment file: copy the example, fill in `WOL_MAC` and `WOL_HOST`
+    (and the `WOL_SSH_*` values if sleep is wanted).
   - Host A (Pi 1): flash Raspberry Pi OS Lite 32-bit trixie, install uv
     (ARMv6 build), clone, run `deploy/pi/install.sh`, install and enable the
     service, install Tailscale from apt.
@@ -193,7 +242,8 @@ Expose exactly these three endpoints. Any other path returns 404.
 ## Non-goals
 - No web UI.
 - No multiple targets or per-request MAC addresses.
-- No scheduling, shutdown, sleep, or remote-desktop features.
+- No scheduling, shutdown, hibernate, or remote-desktop features. Sleep is
+  the only power action besides wake.
 - No Docker image.
 - No persistent storage.
 
@@ -202,12 +252,14 @@ Expose exactly these three endpoints. Any other path returns 404.
 - `uv run ruff check .` exits 0.
 - `uv run pytest -q` exits 0 with all tests passing.
 - With `WOL_MAC` and `WOL_HOST` set, `uv run uvicorn app.main:app` starts;
-  `GET /health`, `POST /wake`, and `GET /status` return the documented
-  responses; any other path returns 404.
-- Without `WOL_MAC`, the server refuses to start with a clear error.
+  `GET /health`, `POST /wake`, `GET /status`, and `POST /sleep` return the
+  documented responses; any other path returns 404.
+- Without `WOL_MAC`, or with a half-configured or dangling `WOL_SSH_*`
+  pair, the server refuses to start with a clear error.
 - `deploy/common/`, `deploy/pi/`, `deploy/termux/`, and `README.md` exist
   and match the behaviour above.
 - On at least one supported host: the install script completes, the server
-  starts on boot, and `POST /wake` from a Tailscale-connected client turns
-  the gaming PC on. A host that was not tried is marked untested in the
-  README.
+  starts on boot, `POST /wake` from a Tailscale-connected client turns the
+  gaming PC on, and (if sleep is configured) `POST /sleep` puts it to sleep
+  and `GET /status` flips to `online: false`. A host that was not tried is
+  marked untested in the README.

@@ -13,7 +13,8 @@ Each task is self-contained: read `SPEC.md` + this file, do one task, verify its
   - `app/main.py` — `app = FastAPI()`; routes `GET /health`, `POST /wake`, `GET /status`. Settings are loaded at import time (module-level `settings = load_settings()`), so a bad env fails at startup.
   - `tests/__init__.py` — empty (makes `app` importable from `uv run pytest` without pytest config).
   - `tests/test_health.py`, `tests/test_wol.py`, `tests/test_config.py`, `tests/test_wake.py`, `tests/test_status.py`.
-  - `deploy/common/gaming-pc-wakeup.env.example`; `deploy/pi/install.sh`, `deploy/pi/gaming-pc-wakeup.service`; `deploy/termux/install.sh`, `deploy/termux/boot.sh`; `README.md`.
+  - `deploy/common/gaming-pc-wakeup.env.example`; `deploy/pi/install.sh`, `deploy/pi/gaming-pc-wakeup.service`; `deploy/termux/install.sh`, `deploy/termux/boot.sh`; `deploy/windows/sleep.ps1`; `README.md`.
+  - `app/sleep.py` — `request_sleep(host, user, key, port, timeout)`; `tests/test_sleep.py`.
 - Env vars and endpoint contracts are defined in `SPEC.md` (Configuration, Endpoints). Do not invent others.
 - Minimalism rule: no extra routes, no DI, no pydantic settings, no logging config, no CLI. Dependencies stay exactly: fastapi, uvicorn; dev: pytest, httpx, ruff. Nothing host-specific in `pyproject.toml`.
 - Tests never touch the network: monkeypatch `app.main.send_magic_packet` and the TCP connect helper. Tests set env vars with `monkeypatch.setenv` and import/reload `app.main` after setting them (use `importlib.reload`).
@@ -115,6 +116,19 @@ Each task is self-contained: read `SPEC.md` + this file, do one task, verify its
   - Termux: pull, `deploy/termux/install.sh`, copy `boot.sh` to `~/.termux/boot/`, reboot the phone, confirm the server answers.
   - From a Tailscale client: `POST /wake` turns the PC on and `GET /status` flips to `online: true`.
 - Acceptance: all local checks pass and at least one host's on-device result is recorded as passing; untested hosts are marked as such in the README. Then set `status: "done"`.
+
+### T12 — `POST /sleep` over SSH (added 2026-09-17; local, does not depend on T5)
+- Why: the user wants to put the PC to sleep remotely as well. Sleep (S3) was chosen over shutdown because WoL from sleep is more reliable and resume is faster. Mechanism: the host SSHes into the PC and triggers a scheduled task that suspends the machine a moment later, so the SSH session ends cleanly first.
+- Action:
+  - `app/config.py`: add `ssh_user: str | None`, `ssh_key: str | None`, `ssh_port: int` (default 22), `ssh_timeout: float` (default 10.0) from `WOL_SSH_USER`, `WOL_SSH_KEY`, `WOL_SSH_PORT`, `WOL_SSH_TIMEOUT`. `ValueError` naming the variable if only one of user/key is set, or if the key path does not exist (`os.path.isfile`). Add `sleep_configured` property or check `ssh_user is not None` in main.
+  - `app/sleep.py`: `request_sleep(host, user, key, port, timeout) -> None`. argv: `["ssh", "-i", key, "-p", str(port), "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=accept-new", f"{user}@{host}", "schtasks /run /tn gaming-pc-sleep"]`. `subprocess.run(argv, capture_output=True, text=True, timeout=timeout)`. Non-zero exit → `RuntimeError(stderr.strip() or f"ssh exited with {rc}")`; `FileNotFoundError` → `RuntimeError("ssh client not found")`; `subprocess.TimeoutExpired` → `RuntimeError(f"ssh timed out after {timeout}s")`.
+  - `app/main.py`: `POST /sleep` with the same `X-Token` rule as `/wake`; 503 `{"detail": "sleep is not configured: set WOL_SSH_USER and WOL_SSH_KEY"}` when unconfigured; `request_sleep(...)`, `RuntimeError` → 502 with its message; 200 `{"status": "sleeping", "host": settings.host}`.
+  - `tests/test_sleep.py`: `request_sleep` with `subprocess.run` monkeypatched: exact argv and kwargs (`timeout`), success on rc 0, `RuntimeError` with stderr text on rc 1, fallback message on empty stderr, `FileNotFoundError` and `TimeoutExpired` mapped. Endpoint: 503 unconfigured (no `request_sleep` call), 401 missing/wrong token, 200 body and args (key from `tmp_path`), 502 on `RuntimeError`, `GET /sleep` → 405.
+  - `tests/test_config.py`: defaults for the four new fields; only user set / only key set → `ValueError` naming the missing one; key path missing → `ValueError` naming `WOL_SSH_KEY`; port/timeout parsing.
+  - `deploy/windows/sleep.ps1`: P/Invoke `SetSuspendState($false, $false, $false)` from `powrprof.dll`.
+  - `deploy/common/gaming-pc-wakeup.env.example`: the four `WOL_SSH_*` lines (user/key empty).
+  - `README.md`: new subsection under PC prerequisites "Sleep over SSH (optional)": enable OpenSSH Server, key generation on the host, `authorized_keys` line with `command="schtasks /run /tn gaming-pc-sleep",no-port-forwarding,no-agent-forwarding,no-pty`, where the file lives for admin vs non-admin users and the `icacls` fix, copy `sleep.ps1`, `Register-ScheduledTask` as SYSTEM with no trigger, local `schtasks /run` test, then the ssh test from the host; add `/sleep` to the endpoint table and curl examples; note Termux needs `pkg install openssh` (add to `deploy/termux/install.sh`).
+- Acceptance: `uv run ruff check .` 0; `uv run pytest -q` all pass; uvicorn smoke: without `WOL_SSH_*` `POST /sleep` → 503; with `WOL_SSH_USER`/`WOL_SSH_KEY` pointing at a temp file and `WOL_HOST=127.0.0.1` → 502 within the timeout (no sshd, or connection refused); with only `WOL_SSH_USER` set → startup fails naming `WOL_SSH_KEY`; `GET /sleep` → 405. The real sleep is verified on the PC in T11.
 
 ## Orchestration notes
 - After each task: update `.agent/state.json` (`completed_tasks`, `current_task`, `iteration`, `status`), and write `.agent/findings/<task>.md`.
