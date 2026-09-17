@@ -3,10 +3,10 @@
 #
 # rust is needed because PyPI's manylinux wheels do not run on Android's
 # bionic libc; pydantic-core is built from source once and cached by uv.
-# Safe to re-run.
+# openssh provides the ssh client used by POST /sleep. Safe to re-run.
 set -eu
 
-pkg install -y python uv rust
+pkg install -y python uv rust openssh
 
 cd "$(dirname "$0")/../.."
 

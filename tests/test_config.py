@@ -16,7 +16,12 @@ def test_defaults_applied() -> None:
         status_port=3389,
         status_timeout=1.0,
         token=None,
+        ssh_user=None,
+        ssh_key=None,
+        ssh_port=22,
+        ssh_timeout=10.0,
     )
+    assert settings.sleep_configured is False
 
 
 def test_custom_values_parsed() -> None:
@@ -66,6 +71,47 @@ def test_invalid_numbers_name_variable(name: str, value: str) -> None:
 
 def test_empty_token_means_no_auth() -> None:
     assert load_settings({**REQUIRED, "WOL_TOKEN": ""}).token is None
+
+
+def test_ssh_values_parsed(tmp_path) -> None:
+    key = tmp_path / "pc"
+    key.write_text("key")
+    env = {
+        **REQUIRED,
+        "WOL_SSH_USER": "gamer",
+        "WOL_SSH_KEY": str(key),
+        "WOL_SSH_PORT": "2222",
+        "WOL_SSH_TIMEOUT": "4",
+    }
+    settings = load_settings(env)
+    assert settings.sleep_configured is True
+    assert settings.ssh_user == "gamer"
+    assert settings.ssh_key == str(key)
+    assert settings.ssh_port == 2222
+    assert settings.ssh_timeout == 4.0
+
+
+def test_ssh_user_without_key_names_key(tmp_path) -> None:
+    with pytest.raises(ValueError, match="WOL_SSH_KEY"):
+        load_settings({**REQUIRED, "WOL_SSH_USER": "gamer"})
+
+
+def test_ssh_key_without_user_names_user(tmp_path) -> None:
+    key = tmp_path / "pc"
+    key.write_text("key")
+    with pytest.raises(ValueError, match="WOL_SSH_USER"):
+        load_settings({**REQUIRED, "WOL_SSH_KEY": str(key)})
+
+
+def test_ssh_key_missing_file_names_key(tmp_path) -> None:
+    with pytest.raises(ValueError, match="WOL_SSH_KEY"):
+        load_settings({**REQUIRED, "WOL_SSH_USER": "gamer", "WOL_SSH_KEY": str(tmp_path / "nope")})
+
+
+@pytest.mark.parametrize(("name", "value"), [("WOL_SSH_PORT", "x"), ("WOL_SSH_TIMEOUT", "y")])
+def test_invalid_ssh_numbers_name_variable(name: str, value: str) -> None:
+    with pytest.raises(ValueError, match=name):
+        load_settings({**REQUIRED, name: value})
 
 
 def test_reads_process_environment_by_default(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,8 @@
 # gaming-pc-wakeup
 
 A minimal FastAPI server that wakes one gaming PC on your LAN with
-Wake-on-LAN and tells you whether it is up. Meant for a small always-on host
+Wake-on-LAN, tells you whether it is up, and can put it to sleep over SSH.
+Meant for a small always-on host
 on the same network: a Raspberry Pi 1 Model B or an old Android phone running
 Termux. Remote use goes over Tailscale; nothing is exposed to the internet.
 
@@ -10,6 +11,7 @@ Termux. Remote use goes over Tailscale; nothing is exposed to the internet.
 | `GET /health` | `{"status": "ok"}`                                              |
 | `POST /wake`  | Sends one magic packet. Needs `X-Token` if `WOL_TOKEN` is set.  |
 | `GET /status` | `{"online": true/false, ...}` via a TCP connect to the PC.      |
+| `POST /sleep` | Puts the PC to sleep over SSH. Optional; see section 1. Same `X-Token` rule. |
 
 Host status: Raspberry Pi 1 — untested. Galaxy Note 8 / Termux — untested.
 
@@ -26,6 +28,63 @@ Host status: Raspberry Pi 1 — untested. Galaxy Note 8 / Termux — untested.
 - Note the adapter's MAC address (`ipconfig /all` → Physical Address) and
   give the PC a fixed IP or DHCP reservation.
 
+### Sleep over SSH (optional)
+
+`POST /sleep` SSHes into the PC and runs a scheduled task that puts it to
+sleep. Sleep, not shutdown: WoL from sleep is more reliable and resume is
+fast. One-time setup, in an elevated PowerShell on the PC unless noted. Use
+an administrator account as the SSH user.
+
+1. Enable the OpenSSH server:
+
+   ```powershell
+   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+   Set-Service -Name sshd -StartupType Automatic
+   Start-Service sshd
+   ```
+
+2. Install the sleep task. Copy `deploy/windows/sleep.ps1` to
+   `C:\gaming-pc-wakeup\sleep.ps1`, then register a task with no trigger
+   and run it once to confirm the PC sleeps:
+
+   ```powershell
+   $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\gaming-pc-wakeup\sleep.ps1'
+   $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
+   Register-ScheduledTask -TaskName gaming-pc-sleep -Action $action -Principal $principal -Force
+   schtasks /run /tn gaming-pc-sleep
+   ```
+
+3. On the host (Pi or phone), create a key and print its public half:
+
+   ```sh
+   ssh-keygen -t ed25519 -f ~/.ssh/gaming-pc -N "" -C gaming-pc-wakeup
+   cat ~/.ssh/gaming-pc.pub
+   ```
+
+4. Register the public key on the PC, restricted so it can only run the
+   sleep task. For an administrator account the file is
+   `C:\ProgramData\ssh\administrators_authorized_keys`; for other accounts
+   it is `C:\Users\<user>\.ssh\authorized_keys`. Add one line:
+
+   ```
+   command="schtasks /run /tn gaming-pc-sleep",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... gaming-pc-wakeup
+   ```
+
+   The administrators file must be readable only by SYSTEM and
+   Administrators, so fix its permissions once:
+
+   ```powershell
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
+   ```
+
+5. Test from the host, then put the user and key path in the env file as
+   `WOL_SSH_USER` and `WOL_SSH_KEY` (on the Pi the service runs as `pi`, so
+   the path is `/home/pi/.ssh/gaming-pc`):
+
+   ```sh
+   ssh -i ~/.ssh/gaming-pc <user>@<pc-ip> schtasks /run /tn gaming-pc-sleep
+   ```
+
 ## 2. Environment file
 
 Copy `deploy/common/gaming-pc-wakeup.env.example`, set `WOL_MAC` and
@@ -39,9 +98,15 @@ Copy `deploy/common/gaming-pc-wakeup.env.example`, set `WOL_MAC` and
 | `WOL_PORT`           | `9`                 | UDP port for the magic packet                        |
 | `WOL_STATUS_PORT`    | `3389`              | TCP port that is open when the PC is up (RDP)        |
 | `WOL_STATUS_TIMEOUT` | `1.0`               | Seconds to wait in `GET /status`                     |
-| `WOL_TOKEN`          | unset               | If set, `POST /wake` requires `X-Token: <value>`     |
+| `WOL_TOKEN`          | unset               | If set, `POST /wake` and `POST /sleep` require `X-Token: <value>` |
+| `WOL_SSH_USER`       | unset               | Windows user for `POST /sleep`; set with `WOL_SSH_KEY` |
+| `WOL_SSH_KEY`        | unset               | Private key path on the host for `POST /sleep`       |
+| `WOL_SSH_PORT`       | `22`                | SSH port on the PC                                   |
+| `WOL_SSH_TIMEOUT`    | `10.0`              | Seconds allowed for the ssh call                     |
 
-The server refuses to start if `WOL_MAC` or `WOL_HOST` is missing or invalid.
+The server refuses to start if `WOL_MAC` or `WOL_HOST` is missing or
+invalid, if only one of `WOL_SSH_USER`/`WOL_SSH_KEY` is set, or if the key
+file does not exist. With neither SSH value set, `POST /sleep` answers 503.
 
 ## 3. Host A: Raspberry Pi 1 Model B
 
@@ -142,6 +207,7 @@ curl http://HOST:8000/health
 curl -X POST http://HOST:8000/wake
 curl -X POST -H "X-Token: your-token" http://HOST:8000/wake   # if WOL_TOKEN is set
 curl http://HOST:8000/status
+curl -X POST http://HOST:8000/sleep                            # if WOL_SSH_* is set
 ```
 
 ## Development

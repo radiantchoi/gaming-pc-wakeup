@@ -16,6 +16,14 @@ class Settings:
     status_port: int
     status_timeout: float
     token: str | None
+    ssh_user: str | None
+    ssh_key: str | None
+    ssh_port: int
+    ssh_timeout: float
+
+    @property
+    def sleep_configured(self) -> bool:
+        return self.ssh_user is not None and self.ssh_key is not None
 
 
 def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
@@ -32,6 +40,15 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
     if not host:
         raise ValueError("WOL_HOST is required")
 
+    ssh_user = env.get("WOL_SSH_USER") or None
+    ssh_key = env.get("WOL_SSH_KEY") or None
+    if ssh_user is not None and ssh_key is None:
+        raise ValueError("WOL_SSH_KEY is required when WOL_SSH_USER is set")
+    if ssh_key is not None and ssh_user is None:
+        raise ValueError("WOL_SSH_USER is required when WOL_SSH_KEY is set")
+    if ssh_key is not None and not os.path.isfile(ssh_key):
+        raise ValueError(f"WOL_SSH_KEY file not found: {ssh_key}")
+
     return Settings(
         mac=mac,
         broadcast=env.get("WOL_BROADCAST", "255.255.255.255"),
@@ -40,6 +57,10 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         status_port=_get_int(env, "WOL_STATUS_PORT", 3389),
         status_timeout=_get_float(env, "WOL_STATUS_TIMEOUT", 1.0),
         token=env.get("WOL_TOKEN") or None,
+        ssh_user=ssh_user,
+        ssh_key=ssh_key,
+        ssh_port=_get_int(env, "WOL_SSH_PORT", 22),
+        ssh_timeout=_get_float(env, "WOL_SSH_TIMEOUT", 10.0),
     )
 
 
