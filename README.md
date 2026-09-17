@@ -114,11 +114,28 @@ The server refuses to start if `WOL_MAC` or `WOL_HOST` is missing or invalid.
    optimised (and remove Termux from "sleeping apps" on Samsung); disable
    Wi-Fi sleep / power saving for Wi-Fi; keep the phone on power. Reboot the
    phone once and check `curl localhost:8000/health` again.
-5. Install the Tailscale app from the Play Store and sign in.
+5. Install the Tailscale app from the Play Store and sign in. Do not try to
+   install tailscale inside Termux; the app is a device-wide VPN service, so
+   the Termux server is reachable at the phone's tailnet address as-is.
+   Then:
+   - Android Settings → VPN → Tailscale → turn on "Always-on VPN" so it
+     reconnects after a reboot without opening the app.
+   - Exclude the Tailscale app from battery optimisation, like Termux.
+   - Do not enable an exit node on this phone. With an exit node all
+     traffic goes into the tunnel and the WoL broadcast never reaches the
+     LAN. If you must, also enable "Allow LAN access".
+   - Check `curl http://<phone tailnet name>:8000/health` from another
+     tailnet device.
 
 ## 5. Using it over the tailnet
 
-Replace `HOST` with the host's Tailscale name or IP.
+The device you call from (phone, laptop) needs the Tailscale client too and
+must be signed in to the same account. In the Tailscale admin console,
+open the host's device entry and choose "Disable key expiry"; otherwise the
+host silently drops off the tailnet after 180 days.
+
+Replace `HOST` with the host's Tailscale name or IP (Machines page in the
+admin console, or `tailscale ip` on the Pi).
 
 ```sh
 curl http://HOST:8000/health
