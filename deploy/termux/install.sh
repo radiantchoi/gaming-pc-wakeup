@@ -11,6 +11,7 @@ pkg install -y python uv rust openssh
 cd "$(dirname "$0")/../.."
 
 # uv has no managed CPython build for Android; always use Termux's python.
-UV_PYTHON_DOWNLOADS=never uv sync --no-dev
+# Android's filesystem rejects uv's hardlinks; copy instead of warning.
+UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy uv sync --no-dev
 
 echo "Installed. Copy deploy/termux/boot.sh to ~/.termux/boot/ to start on boot."
