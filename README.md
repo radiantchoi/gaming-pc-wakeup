@@ -13,7 +13,9 @@ Termux. Remote use goes over Tailscale; nothing is exposed to the internet.
 | `GET /status` | `{"online": true/false, ...}` via a TCP connect to the PC.      |
 | `POST /sleep` | Puts the PC to sleep over SSH. Optional; see section 1. Same `X-Token` rule. |
 
-Host status: Raspberry Pi 1 — untested. Galaxy Note 8 / Termux — untested.
+Host status: Raspberry Pi 1 — untested. Galaxy Note 8 / Termux — not
+pursued (an install attempt failed and the phone was dropped as a host; the
+Termux files remain as untested reference).
 
 ## 1. PC prerequisites
 

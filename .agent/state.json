@@ -5,8 +5,8 @@
   "current_task": "T5",
   "current_task_status": "waiting_for_human",
   "completed_tasks": ["T1", "T2", "T3", "T3b", "T4", "T6", "T7", "T8", "T9", "T10", "T12"],
-  "failed_tasks": [],
-  "iteration": 12,
-  "updated_at": "2026-09-17T03:00:00Z",
-  "notes": "T12 (POST /sleep over SSH) done by the orchestrator and verified locally: 61 tests pass, ruff clean, uvicorn smoke for 503/502/405 and the half-configured startup failure. Findings at .agent/findings/T12.md. Sleep is optional: with WOL_SSH_USER/WOL_SSH_KEY unset the server behaves as before. All worker tasks complete. Waiting on the user for the host gates (T5-pi and/or T5-termux) and the PC-side SSH/scheduled-task setup, then T11 on-device acceptance (wake, status, sleep)."
+  "failed_tasks": ["T5-termux: install failed on the Note 8; user dropped the phone as a host (see .agent/findings/T5-termux.md)"],
+  "iteration": 13,
+  "updated_at": "2026-09-19T02:00:00Z",
+  "notes": "The Raspberry Pi 1 Model B is now the only host. Pi OS Lite 32-bit (trixie) has been flashed with user pi and SSH enabled; T5-pi is in progress over SSH from the dev Mac (README section 3). Needed from the Pi: python3 --version, uname -m, free -m, install script wall time, and whether pydantic-core installed as a linux_armv6l wheel without a build. Then env file + service + Tailscale, then T11 (wake, status, sleep once the PC-side SSH task is set up)."
 }
